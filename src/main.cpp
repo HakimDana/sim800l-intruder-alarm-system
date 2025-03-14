@@ -7,11 +7,12 @@
 #define alarmpin 7
 
 void updateSerial();
-void handlealarm();
+void handlealarm(bool *alarmstateptr);
 void handlecommand();
 
+String checkstats();
 
-void sendsms(String sms,String phonenumber);
+void sendsms(String sms, String phonenumber);
 String cutstring(String text, int starti, int endi);
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger();
@@ -19,13 +20,14 @@ bool checkMessenger();
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
 
-bool excuted = false;
+bool alarmstate = false;
+bool executed = false;
 bool newMes = false;
 bool enable = true;
 unsigned long dialstart = 0;
 unsigned long alarmStart = 0;
 String sim800lbuff = "";
-String NumberWhiteList[] = {"989029026240","989380869770","989153084431"};
+String NumberWhiteList[] = {"989029026240"};
 
 String *sim800lbuffptr = &sim800lbuff;
 bool *newMesptr = &newMes;
@@ -33,6 +35,8 @@ bool *enableptr = &enable;
 
 void setup()
 {
+  pinMode(13,OUTPUT);
+  digitalWrite(13,HIGH);
   // Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
 
@@ -54,10 +58,7 @@ void setup()
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
 
-  sendsms("hello world","989029026240");
-
-
-
+  //sendsms("hello world", "989029026240");
 }
 
 void loop()
@@ -67,55 +68,57 @@ void loop()
   {
     if (enable == false)
     {
-      digitalWrite(greenledpin,LOW);
-      digitalWrite(redledpin,LOW);
-    }else{
-      digitalWrite(greenledpin,LOW);
-      digitalWrite(redledpin,HIGH);
+      digitalWrite(greenledpin, LOW);
+      digitalWrite(redledpin, LOW);
     }
-    
-    if (enable == false)
+    else
     {
-      excuted = true;
+      digitalWrite(greenledpin, LOW);
+      digitalWrite(redledpin, HIGH);
     }
 
-    if (excuted == false)
+    if (enable == false)
+    {
+      executed = true;
+    }
+
+    if (executed == false)
     {
       digitalWrite(alarmpin, HIGH);
+      alarmstate = true;
 
       alarmStart = millis();
 
-      for (int index = 0; index < sizeof(NumberWhiteList)/sizeof(NumberWhiteList[0]); index++)
+      for (int index = 0; index < sizeof(NumberWhiteList) / sizeof(NumberWhiteList[0]); index++)
       {
-         mySerial.println("ATD+ +" + NumberWhiteList[index] + ";");
-         updateSerial();
-
-         dialstart = millis();
-      delay(10);
-
-      while (millis() - dialstart <= 10000)
-      {
+        mySerial.println("ATD+ +" + NumberWhiteList[index] + ";");
         updateSerial();
-        handlecommand();
-        handlealarm();
 
-        if (enable == false)
+        dialstart = millis();
+        delay(10);
+
+        while (millis() - dialstart <= 10000)
         {
-          digitalWrite(greenledpin, LOW);
-          digitalWrite(redledpin, LOW);
+          updateSerial();
+          handlecommand();
+          handlealarm(&alarmstate);
+
+          if (enable == false)
+          {
+            digitalWrite(greenledpin, LOW);
+            digitalWrite(redledpin, LOW);
+          }
+          else if (digitalRead(switchpin) == LOW)
+          {
+            digitalWrite(greenledpin, HIGH);
+            digitalWrite(redledpin, LOW);
+          }
         }
-        else if (digitalRead(switchpin) == LOW)
-        {
-          digitalWrite(greenledpin, HIGH);
-          digitalWrite(redledpin, LOW);
-        }
+
+        mySerial.println("ATH");
+        updateSerial();
       }
 
-      mySerial.println("ATH");
-      updateSerial();
-
-      }
-      
       /*mySerial.println("ATD+ +989029026240;");
       updateSerial();
 
@@ -126,7 +129,7 @@ void loop()
       {
         updateSerial();
         handlecommand();
-        handlealarm();
+        handlealarm(&alarmstate);
 
         if (enable == false)
         {
@@ -144,7 +147,7 @@ void loop()
       updateSerial();*/
     }
 
-    excuted = true;
+    executed = true;
   }
   else
   {
@@ -158,12 +161,12 @@ void loop()
       digitalWrite(redledpin, LOW);
       digitalWrite(greenledpin, HIGH);
     }
-    excuted = false;
+    executed = false;
   }
 
   updateSerial();
   handlecommand();
-  handlealarm();
+  handlealarm(&alarmstate);
 
   delay(100);
 }
@@ -185,11 +188,12 @@ void updateSerial()
   }
 }
 
-void handlealarm()
+void handlealarm(bool *alarmStateptr)
 {
   if (millis() - alarmStart > 600000)
   {
     digitalWrite(alarmpin, LOW);
+    *alarmStateptr = false;
   }
 }
 
@@ -199,12 +203,11 @@ void handlecommand()
   {
     Serial.println("number matched");
   }
-  
 
   String sms = "";
   if (sim800lbuff[2] == '+' && sim800lbuff[3] == 'C' && sim800lbuff[4] == 'M' && sim800lbuff[5] == 'T')
   {
-   
+
     for (unsigned int i = 10; i < sim800lbuff.length() - 1; i++)
     {
       if (sim800lbuff[i] == '\n')
@@ -227,6 +230,7 @@ void handlecommand()
         else if (CompareFirstofString(sms, "stats") == true)
         {
           Serial.println("stats command detected");
+          Serial.println(checkstats());
         }
         else if (CompareFirstofString(sms, "alarm off") == true)
         {
@@ -238,8 +242,8 @@ void handlecommand()
     }
   }
 }
-
-String cutstring(String text, int starti, int endi) // returns a string starting and ending from the given index numbers in the given string
+// returns a string starting and ending from the given index numbers in the given string
+String cutstring(String text, int starti, int endi)
 {
 
   String outputstring = "";
@@ -250,8 +254,8 @@ String cutstring(String text, int starti, int endi) // returns a string starting
 
   return outputstring;
 }
-
-bool CompareFirstofString(String inputString, String stringtoCompare) // compares the fist characters of input string to the second one
+// compares the first characters of input string to the second one
+bool CompareFirstofString(String inputString, String stringtoCompare)
 {
   for (unsigned int i = 0; i < stringtoCompare.length(); i++)
   {
@@ -262,11 +266,10 @@ bool CompareFirstofString(String inputString, String stringtoCompare) // compare
   }
   return true;
 }
-
-bool checkMessenger(){
-   String phonenumber = cutstring(sim800lbuff,11,21);
-   //Serial.print("cut string value:");
-   //Serial.println(phonenumber);
+// compares the senders phone number to the given number
+bool checkMessenger()
+{
+  String phonenumber = cutstring(sim800lbuff, 11, 21);
 
   for (int i = 0; i < sizeof(NumberWhiteList) / sizeof(NumberWhiteList[0]); i++)
   {
@@ -274,15 +277,40 @@ bool checkMessenger(){
     {
       return true;
     }
-    
   }
   return false;
 }
 
-void sendsms(String sms,String phonenumber){
-  mySerial.println("AT+CMGS=\"+989029026240\"");//change ZZ with country code and xxxxxxxxxxx with phone number to sms
+void sendsms(String sms, String phonenumber)
+{
+  mySerial.println("AT+CMGS=\"+" + phonenumber + "\""); // change ZZ with country code and xxxxxxxxxxx with phone number to sms
   updateSerial();
-  mySerial.print(sms); //text content
+  mySerial.print(sms); // text content
   updateSerial();
   mySerial.write(26);
+}
+
+String checkstats()
+{
+  String message = "Door state: ";
+  if (digitalRead(switchpin) == LOW)
+  {
+    message += "closed";
+  }
+  else
+  {
+    message += "open";
+  }
+
+  message += "\nAlarm state: ";
+  if (!alarmstate)
+  {
+    message += "inactive";
+  }
+  else
+  {
+    message += "active";
+  }
+
+  return message;
 }
