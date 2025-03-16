@@ -15,7 +15,7 @@ String checkstats();
 void sendsms(String sms, String phonenumber);
 String cutstring(String text, int starti, int endi);
 bool CompareFirstofString(String inputString, String stringtoCompare);
-bool checkMessenger();
+bool checkMessenger(String *phonenumber);
 
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
@@ -199,7 +199,9 @@ void handlealarm(bool *alarmStateptr)
 
 void handlecommand()
 {
-  if (checkMessenger() == true)
+  String Senderphonenumber = cutstring(sim800lbuff, 11, 21);
+
+  if (checkMessenger(&Senderphonenumber) == true)
   {
     Serial.println("number matched");
   }
@@ -267,13 +269,13 @@ bool CompareFirstofString(String inputString, String stringtoCompare)
   return true;
 }
 // compares the senders phone number to the given number
-bool checkMessenger()
+bool  checkMessenger(String *phonenumber)
 {
-  String phonenumber = cutstring(sim800lbuff, 11, 21);
+  //String phonenumber = cutstring(sim800lbuff, 11, 21);
 
   for (int i = 0; i < sizeof(NumberWhiteList) / sizeof(NumberWhiteList[0]); i++)
   {
-    if (phonenumber == NumberWhiteList[i])
+    if (*phonenumber == NumberWhiteList[i])
     {
       return true;
     }
