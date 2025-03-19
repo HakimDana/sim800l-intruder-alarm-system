@@ -17,6 +17,7 @@ String cutstring(String text, int starti, int endi);
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(String *phonenumber);
 
+
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
 
@@ -117,34 +118,7 @@ void loop()
 
         mySerial.println("ATH");
         updateSerial();
-      }
-
-      /*mySerial.println("ATD+ +989029026240;");
-      updateSerial();
-
-      dialstart = millis();
-      delay(10);
-
-      while (millis() - dialstart <= 10000)
-      {
-        updateSerial();
-        handlecommand();
-        handlealarm(&alarmstate);
-
-        if (enable == false)
-        {
-          digitalWrite(greenledpin, LOW);
-          digitalWrite(redledpin, LOW);
-        }
-        else if (digitalRead(switchpin) == LOW)
-        {
-          digitalWrite(greenledpin, HIGH);
-          digitalWrite(redledpin, LOW);
-        }
-      }
-
-      mySerial.println("ATH");
-      updateSerial();*/
+      }     
     }
 
     executed = true;
@@ -204,9 +178,8 @@ void handlecommand()
   if (checkMessenger(&Senderphonenumber) == true)
   {
     Serial.println("number matched");
-  }
 
-  String sms = "";
+    String sms = "";
   if (sim800lbuff[2] == '+' && sim800lbuff[3] == 'C' && sim800lbuff[4] == 'M' && sim800lbuff[5] == 'T')
   {
 
@@ -215,7 +188,6 @@ void handlecommand()
       if (sim800lbuff[i] == '\n')
       {
         sms = cutstring(sim800lbuff, i + 2, sim800lbuff.length());
-        Serial.print(sms[0], DEC);
         Serial.print("there is your sms:");
         Serial.println(sms);
 
@@ -237,12 +209,21 @@ void handlecommand()
         else if (CompareFirstofString(sms, "alarm off") == true)
         {
           Serial.println("alarm off command detected");
+        }else if (CompareFirstofString(sms,"add number")){
+          Serial.println("add number command detected");  
+          
         }
+        
+        
 
         continue;
       }
     }
   }
+
+  }
+
+  
 }
 // returns a string starting and ending from the given index numbers in the given string
 String cutstring(String text, int starti, int endi)
