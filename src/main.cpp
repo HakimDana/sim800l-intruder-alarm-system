@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
+#include <EEPROM.h>
 
 #define switchpin 4
 #define redledpin 5
@@ -9,14 +10,22 @@
 void updateSerial();
 void handlealarm(bool *alarmstateptr);
 void handlecommand();
+void sendsms(String sms, String phonenumber);
 
 String checkstats();
-
-void sendsms(String sms, String phonenumber);
 String cutstring(String text, int starti, int endi);
+
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(String *phonenumber);
+bool writeNumberToEeprom(String number);
 
+unsigned char calcChecksum(String inputString);
+
+struct storedNumber
+  {
+    char phoneNumber[13];
+    unsigned char checksum = 0;
+  };
 
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
@@ -58,10 +67,16 @@ void setup()
   updateSerial();
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
+  writeNumberToEeprom(NumberWhiteList[0]);
+  
+  storedNumber testnum;
 
-  //sendsms("hello world", "989029026240");
+  EEPROM.get(0,testnum);
+  Serial.println(testnum.phoneNumber);
+  Serial.println(testnum.checksum);
+  Serial.println("i have finished printing the stuff, entering the loop");
+  
 }
-
 void loop()
 {
 
@@ -213,9 +228,6 @@ void handlecommand()
           Serial.println("add number command detected");  
           
         }
-        
-        
-
         continue;
       }
     }
@@ -296,4 +308,37 @@ String checkstats()
   }
 
   return message;
+}
+
+unsigned char calcChecksum(String inputString)
+{
+  unsigned char checksum = 0;
+
+  for (int i = 0; i < inputString.length(); i++)
+   {
+    checksum += inputString[i];
+   }
+
+   return checksum;
+}
+
+bool writeNumberToEeprom(String number)
+{
+   int index = 0;
+   storedNumber  tempStoredNumber;
+   number.toCharArray(tempStoredNumber.phoneNumber,13);
+   tempStoredNumber.checksum = calcChecksum(tempStoredNumber.phoneNumber);
+   
+   
+  Serial.println(tempStoredNumber.phoneNumber);
+  Serial.println(tempStoredNumber.checksum);
+
+  for (int i = 0; i < EEPROM.length(); i++)
+  {
+    if(EEPROM[i] == 255){
+      EEPROM.put(i,tempStoredNumber);
+      return false;
+    }
+  }
+  
 }
