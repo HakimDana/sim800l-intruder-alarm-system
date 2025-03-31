@@ -67,14 +67,20 @@ void setup()
   updateSerial();
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
-  writeNumberToEeprom(NumberWhiteList[0]);
   
+  // for (int i = 0; i < EEPROM.length(); i++)
+  // {
+    //   EEPROM[0] = 255;
+    // }
+    
+  // writeNumberToEeprom(NumberWhiteList[0]);
+
   storedNumber testnum;
 
   EEPROM.get(0,testnum);
   Serial.println(testnum.phoneNumber);
   Serial.println(testnum.checksum);
-  Serial.println("i have finished printing the stuff, entering the loop");
+  Serial.println("i have finished printing stuff, entering the loop");
   
 }
 void loop()
@@ -322,6 +328,11 @@ unsigned char calcChecksum(String inputString)
    return checksum;
 }
 
+
+String readWhitelist(){
+
+}
+
 bool writeNumberToEeprom(String number)
 {
    int index = 0;
@@ -333,12 +344,28 @@ bool writeNumberToEeprom(String number)
   Serial.println(tempStoredNumber.phoneNumber);
   Serial.println(tempStoredNumber.checksum);
 
-  for (int i = 0; i < EEPROM.length(); i++)
+const int STRUCT_SIZE = sizeof(tempStoredNumber);
+
+  for (int index = 0; index < EEPROM.length(); index+= STRUCT_SIZE)
   {
-    if(EEPROM[i] == 255){
-      EEPROM.put(i,tempStoredNumber);
-      return false;
+    bool isEmpty = false;
+    for (int slotIndex = 0; slotIndex < STRUCT_SIZE; slotIndex++)
+    {
+      if (EEPROM[slotIndex + index] != 0xff)
+      {
+        isEmpty = false;
+      }else{
+        isEmpty = true;
+        break;
+      }
+      
     }
+    if (isEmpty)
+    {
+      EEPROM.put(index,tempStoredNumber);
+      break;
+    }
+    
+    
   }
-  
 }
