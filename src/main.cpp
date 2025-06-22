@@ -20,6 +20,7 @@ bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(String phonenumber);
 bool writeNumberToEeprom(String number);
 bool deleteNumberInEeprom(String number);
+bool storePassword(String password);
 
 unsigned char calcChecksum(String inputString);
 
@@ -28,6 +29,8 @@ struct storedNumber
   char phoneNumber[13];
   unsigned char checksum = 0;
 };
+
+const unsigned char eepromStartIndex = 16;
 
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
@@ -49,7 +52,15 @@ bool *enableptr = &enable;
 
 void printwholeeeprom()
 {
-  for (int i = 0; i < EEPROM.length(); i += 14)
+  for (int i = 0; i < eepromStartIndex; i++)
+  {
+    Serial.print((char)EEPROM[i]);
+    Serial.print(" ");
+  }
+  Serial.println("");
+
+  
+  for (int i = eepromStartIndex; i < EEPROM.length(); i += 14)
   {
     for (int index = 0; index < 14 && i + index < EEPROM.length(); index++)
     {
@@ -96,23 +107,18 @@ void setup()
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
   // erase eeprom:
-  // for (int i = 0; i < EEPROM.length(); i++)
-  //{
-  //  EEPROM.update(i, 255);
-  //}
-
-  // Serial.println(writeNumberToEeprom("985138442196"));
-  // readWhitelist();
-  // printwholewhitelist();
-  // Serial.println(writeNumberToEeprom("985138442196"));
-  // readWhitelist();
-  deleteNumberInEeprom("985138442196");
+   for (int i = 0; i < EEPROM.length(); i++)
+  {
+    EEPROM.update(i, 255);
+  }
+  //deleteNumberInEeprom("985138442196");
   writeNumberToEeprom("989029026240");
+  storePassword("1234");
   printwholeeeprom();
-  readWhitelist();
-  printwholewhitelist();
-  Serial.print("numberwhitelistlength is: ");
-  Serial.println(numberWhiteListLength);
+  //readWhitelist();
+  //printwholewhitelist();
+  //Serial.print("numberwhitelistlength is: ");
+  //Serial.println(numberWhiteListLength);
 }
 void loop()
 {
@@ -364,7 +370,7 @@ void readWhitelist()
 
   const int STRUCT_SIZE = sizeof(tempReadNumber);
 
-  for (int index = 0; index < EEPROM.length(); index += STRUCT_SIZE)
+  for (int index = eepromStartIndex; index < EEPROM.length(); index += STRUCT_SIZE)
   {
     bool isEmpty = false;
     for (int slotIndex = 0; slotIndex < STRUCT_SIZE; slotIndex++)
@@ -422,7 +428,7 @@ bool writeNumberToEeprom(String number)
 
   const int STRUCT_SIZE = sizeof(tempStoredNumber);
 
-  for (int index = 0; index < EEPROM.length(); index += STRUCT_SIZE)
+  for (int index = eepromStartIndex; index < EEPROM.length(); index += STRUCT_SIZE)
   {
 
     bool isEmpty = true;
@@ -457,7 +463,7 @@ bool deleteNumberInEeprom(String number)
 
   const int STRUCT_SIZE = sizeof(tempReadNumber);
 
-  for (int index = 0; index < EEPROM.length(); index += STRUCT_SIZE)
+  for (int index = eepromStartIndex; index < EEPROM.length(); index += STRUCT_SIZE)
   {
     bool isEmpty = false;
     for (int slotIndex = 0; slotIndex < STRUCT_SIZE; slotIndex++)
@@ -487,4 +493,21 @@ bool deleteNumberInEeprom(String number)
   }
   Serial.println("shomare ro piyda nakardom");
   return true;
+}
+
+bool storePassword(String password){
+  uint8_t passwordlength = password.length();
+
+  if(passwordlength >= eepromStartIndex){
+    Serial.println("password is too long");
+    return true;
+  }
+  
+  for (uint8_t i = 0; i < passwordlength; i++)
+  {
+    EEPROM.write(i,password[i]);
+  }
+  EEPROM.write(passwordlength,'\0');
+  return false;
+  
 }
