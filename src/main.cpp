@@ -15,6 +15,7 @@ void readWhitelist();
 
 String checkstats();
 String cutstring(String text, int starti, int endi);
+String retrievePassword();
 
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(String phonenumber);
@@ -119,6 +120,8 @@ void setup()
   //printwholewhitelist();
   //Serial.print("numberwhitelistlength is: ");
   //Serial.println(numberWhiteListLength);
+  Serial.print("aga inan passwor dkhedmat shoma: ");
+  Serial.println(retrievePassword());
 }
 void loop()
 {
@@ -509,5 +512,20 @@ bool storePassword(String password){
   }
   EEPROM.write(passwordlength,'\0');
   return false;
+  
+}
+
+String retrievePassword()
+{ 
+  String password = "";
+  for (size_t i = 0; i < eepromStartIndex; i++)
+  {
+    if(EEPROM[i] == '\0')
+    {
+      return password;
+    }else{
+      password += (char)EEPROM[i];
+    }
+  }
   
 }
