@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
+#include <MD5.h>
 
 #define switchpin 4
 #define redledpin 5
@@ -12,24 +13,37 @@ void handlealarm(bool *alarmstateptr);
 void handlecommand();
 void sendsms(String sms, String phonenumber);
 void readWhitelist();
+void storePassword(String password);
 
 String checkstats();
 String cutstring(String text, int starti, int endi);
-String retrievePassword();
 
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(String phonenumber);
 bool writeNumberToEeprom(String number);
 bool deleteNumberInEeprom(String number);
-bool storePassword(String password);
+bool verifyPassword(String password);
 
 unsigned char calcChecksum(String inputString);
+
 
 struct storedNumber
 {
   char phoneNumber[13];
   unsigned char checksum = 0;
 };
+
+struct authenticatedNumber
+{
+  char number[13];
+  unsigned long time = millis();
+
+  authenticatedNumber(String inputNumber){
+    time = millis();
+    inputNumber.toCharArray(number,13);
+  }
+};
+
 
 const unsigned char eepromStartIndex = 16;
 
@@ -55,7 +69,7 @@ void printwholeeeprom()
 {
   for (int i = 0; i < eepromStartIndex; i++)
   {
-    Serial.print((char)EEPROM[i]);
+    Serial.print(EEPROM[i],HEX);
     Serial.print(" ");
   }
   Serial.println("");
@@ -107,21 +121,18 @@ void setup()
   updateSerial();
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
-  // erase eeprom:
-   for (int i = 0; i < EEPROM.length(); i++)
-  {
-    EEPROM.update(i, 255);
-  }
-  //deleteNumberInEeprom("985138442196");
-  writeNumberToEeprom("989029026240");
+   //erase eeprom:
+  //for (int i = 0; i < EEPROM.length(); i++)
+  //{
+  //  EEPROM.update(i, 255);
+  //}
   storePassword("1234");
   printwholeeeprom();
-  //readWhitelist();
-  //printwholewhitelist();
-  //Serial.print("numberwhitelistlength is: ");
-  //Serial.println(numberWhiteListLength);
-  Serial.print("aga inan passwor dkhedmat shoma: ");
-  Serial.println(retrievePassword());
+  Serial.print("bezar password 1234 ro test konom: ");
+  Serial.println(verifyPassword("1234"));
+  Serial.print("bezar password qwerty ro test konom: ");
+  Serial.println(verifyPassword("qwerty"));
+  
 }
 void loop()
 {
@@ -498,34 +509,44 @@ bool deleteNumberInEeprom(String number)
   return true;
 }
 
-bool storePassword(String password){
-  uint8_t passwordlength = password.length();
+void storePassword(String password){
 
-  if(passwordlength >= eepromStartIndex){
-    Serial.println("password is too long");
-    return true;
+  char charPassword[password.length() + 1];
+  password.toCharArray(charPassword,password.length() + 1);
+  unsigned char* hash=MD5::make_hash(charPassword);
+  
+  for (size_t i = 0; i < eepromStartIndex; i++)
+  {
+    EEPROM.update(i,hash[i]);
   }
   
-  for (uint8_t i = 0; i < passwordlength; i++)
-  {
-    EEPROM.write(i,password[i]);
-  }
-  EEPROM.write(passwordlength,'\0');
-  return false;
+  char *md5str = MD5::make_digest(hash, 16);
+  free(hash);
+  //print it on our serial monitor
+  Serial.println(md5str);
+  //Give the Memory back to the System if you run the md5 Hash generation in a loop
+  free(md5str);
   
 }
 
-String retrievePassword()
-{ 
-  String password = "";
+bool verifyPassword(String password)
+{
+  //unsigned char *hash = calcpasswordHash(password);
+
+  char charPassword[password.length() + 1];
+  password.toCharArray(charPassword,password.length() + 1);
+  unsigned char* hash=MD5::make_hash(charPassword);
+
   for (size_t i = 0; i < eepromStartIndex; i++)
   {
-    if(EEPROM[i] == '\0')
+    if (hash[i] != EEPROM[i])
     {
-      return password;
-    }else{
-      password += (char)EEPROM[i];
+      free(hash);
+      return false;
     }
+    
   }
-  
+  free(hash);
+  return true;
+
 }
