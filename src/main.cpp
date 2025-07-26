@@ -8,12 +8,15 @@
 #define greenledpin 6
 #define alarmpin 7
 
+const unsigned char eepromStartIndex = 16;
+const int alarmDuration = 60000;
+
 void updateSerial();
-void handlealarm(bool *alarmstateptr);
 void handlecommand();
 void sendsms(String sms, String phonenumber);
 void readWhitelist();
 void storePassword(String password);
+void handleAll();
 
 String checkstats();
 String cutstring(String text, int starti, int endi);
@@ -26,7 +29,6 @@ bool verifyPassword(String password);
 
 unsigned char calcChecksum(String inputString);
 
-
 struct storedNumber
 {
   char phoneNumber[13];
@@ -38,24 +40,56 @@ struct authenticatedNumber
   char number[13];
   unsigned long time = millis();
 
-  authenticatedNumber(String inputNumber){
+  authenticatedNumber(String inputNumber)
+  {
     time = millis();
-    inputNumber.toCharArray(number,13);
+    inputNumber.toCharArray(number, 13);
   }
 };
 
+class alarm
+{
+private:
+  bool State = false;
+  int pin;
+  unsigned long activationTime;
 
-const unsigned char eepromStartIndex = 16;
+public:
+  alarm(int alarmPin);
+  void arm()
+  {
+    digitalWrite(pin, HIGH);
+    State = true;
+    activationTime = millis();
+  }
+
+  void handle()
+  {
+    if (millis() - activationTime > alarmDuration)
+    {
+      digitalWrite(pin, LOW);
+      State = false;
+    }
+  }
+
+  bool getState()
+  {
+    return State;
+  }
+};
+
+alarm::alarm(int alarmPin)
+{
+  pin = alarmPin;
+}
 
 // Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
 
-bool alarmstate = false;
 bool executed = false;
 bool newMes = false;
 bool enable = true;
 unsigned long dialstart = 0;
-unsigned long alarmStart = 0;
 String sim800lbuff = "";
 String NumberWhiteList[70];
 
@@ -69,12 +103,11 @@ void printwholeeeprom()
 {
   for (int i = 0; i < eepromStartIndex; i++)
   {
-    Serial.print(EEPROM[i],HEX);
+    Serial.print(EEPROM[i], HEX);
     Serial.print(" ");
   }
   Serial.println("");
 
-  
   for (int i = eepromStartIndex; i < EEPROM.length(); i += 14)
   {
     for (int index = 0; index < 14 && i + index < EEPROM.length(); index++)
@@ -96,6 +129,7 @@ void printwholewhitelist()
   }
   Serial.println(" aga white listo printidam");
 }
+alarm siren(alarmpin);
 
 void setup()
 {
@@ -121,18 +155,17 @@ void setup()
   updateSerial();
   mySerial.println("AT+CNMI=1,2,0,0,0");
   updateSerial();
-   //erase eeprom:
-  //for (int i = 0; i < EEPROM.length(); i++)
+  // erase eeprom:
+  // for (int i = 0; i < EEPROM.length(); i++)
   //{
-  //  EEPROM.update(i, 255);
-  //}
+  //   EEPROM.update(i, 255);
+  // }
   storePassword("1234");
   printwholeeeprom();
   Serial.print("bezar password 1234 ro test konom: ");
   Serial.println(verifyPassword("1234"));
   Serial.print("bezar password qwerty ro test konom: ");
   Serial.println(verifyPassword("qwerty"));
-  
 }
 void loop()
 {
@@ -157,12 +190,9 @@ void loop()
 
     if (executed == false)
     {
-      digitalWrite(alarmpin, HIGH);
-      alarmstate = true;
+      siren.arm();
 
-      alarmStart = millis();
-
-      for (int index = 0; index < sizeof(NumberWhiteList) / sizeof(NumberWhiteList[0]); index++)
+      for (int index = 0; index < numberWhiteListLength; index++)
       {
         mySerial.println("ATD+ +" + NumberWhiteList[index] + ";");
         updateSerial();
@@ -174,7 +204,7 @@ void loop()
         {
           updateSerial();
           handlecommand();
-          handlealarm(&alarmstate);
+          siren.handle();
 
           if (enable == false)
           {
@@ -212,7 +242,7 @@ void loop()
 
   updateSerial();
   handlecommand();
-  handlealarm(&alarmstate);
+  siren.handle();
 
   delay(100);
 }
@@ -231,15 +261,6 @@ void updateSerial()
     data = mySerial.read();
     Serial.write(data); // Forward what Software Serial received to Serial Port
     sim800lbuff += data;
-  }
-}
-
-void handlealarm(bool *alarmStateptr)
-{
-  if (millis() - alarmStart > 600000)
-  {
-    digitalWrite(alarmpin, LOW);
-    *alarmStateptr = false;
   }
 }
 
@@ -353,7 +374,7 @@ String checkstats()
   }
 
   message += "\nAlarm state: ";
-  if (!alarmstate)
+  if (!siren.getState())
   {
     message += "inactive";
   }
@@ -509,33 +530,33 @@ bool deleteNumberInEeprom(String number)
   return true;
 }
 
-void storePassword(String password){
+void storePassword(String password)
+{
 
   char charPassword[password.length() + 1];
-  password.toCharArray(charPassword,password.length() + 1);
-  unsigned char* hash=MD5::make_hash(charPassword);
-  
+  password.toCharArray(charPassword, password.length() + 1);
+  unsigned char *hash = MD5::make_hash(charPassword);
+
   for (size_t i = 0; i < eepromStartIndex; i++)
   {
-    EEPROM.update(i,hash[i]);
+    EEPROM.update(i, hash[i]);
   }
-  
+
   char *md5str = MD5::make_digest(hash, 16);
   free(hash);
-  //print it on our serial monitor
+  // print it on our serial monitor
   Serial.println(md5str);
-  //Give the Memory back to the System if you run the md5 Hash generation in a loop
+  // Give the Memory back to the System if you run the md5 Hash generation in a loop
   free(md5str);
-  
 }
 
 bool verifyPassword(String password)
 {
-  //unsigned char *hash = calcpasswordHash(password);
+  // unsigned char *hash = calcpasswordHash(password);
 
   char charPassword[password.length() + 1];
-  password.toCharArray(charPassword,password.length() + 1);
-  unsigned char* hash=MD5::make_hash(charPassword);
+  password.toCharArray(charPassword, password.length() + 1);
+  unsigned char *hash = MD5::make_hash(charPassword);
 
   for (size_t i = 0; i < eepromStartIndex; i++)
   {
@@ -544,9 +565,13 @@ bool verifyPassword(String password)
       free(hash);
       return false;
     }
-    
   }
   free(hash);
   return true;
+}
 
+void handleAll() {
+  updateSerial;
+  handlecommand();
+  siren.handle();
 }
