@@ -10,7 +10,7 @@
 
 const unsigned char eepromStartIndex = 16;
 const int alarmDuration = 60000;
-const unsigned long authTimeOut = 3000;
+const unsigned long authTimeOut = 90000;
 
 void updateSerial();
 void handlecommand();
@@ -23,11 +23,10 @@ String checkstats();
 String cutstring(String text, int starti, int endi);
 
 bool CompareFirstofString(String inputString, String stringtoCompare);
-bool checkMessenger(String phonenumber);
+bool checkMessenger(char *phonenumber);
 bool writeNumberToEeprom(String number);
 bool deleteNumberInEeprom(String number);
-bool verifyPassword(String password);
-
+bool verifyPassword(char *password);
 
 unsigned char calcChecksum(String inputString);
 
@@ -39,51 +38,52 @@ struct storedNumber
 
 class authNumList
 {
-        private:
-        unsigned char length = 0;
-        
+private:
+        uint8_t length = 0;
+
         struct authenticatedNumber
         {
-                String number;
-                unsigned long time;
+                char number[13];
+                unsigned long time = 0;
         };
-        
-        authenticatedNumber list[10];
-        
-        public:
-        void add(String number)
+
+        authenticatedNumber list[5];
+
+public:
+        void add(char *number)
         {
                 if (length == 10)
                 {
                         Serial.println("authenticated number list is full");
                         return;
                 }
-                
+
                 for (size_t i = 0; i < length; i++)
                 {
-                        if (list[i].number == number)
+                        if (strcmp(number,list[i].number))
                         {
                                 list[i].time = millis();
                                 Serial.println("updated the time");
                                 return;
                         }
                 }
-                
-                list[length].number = number;
+
+                strncpy(list[length].number,number,13);
                 list[length].time = millis();
                 length++;
         }
-        
+
         void deleteNumber(unsigned char index)
         {
                 for (size_t i = index; i < length; i++)
                 {
-                        list[i].number = list[i + 1].number;
+                        //list[i].number = list[i + 1].number;
+                        strncpy(list[i].number,list[i + 1].number,13);
                         list[i].time = list[i + 1].time;
                 }
                 length--;
         }
-        
+
         void handle()
         {
                 for (size_t i = 0; i < length; i++)
@@ -95,7 +95,7 @@ class authNumList
                         }
                 }
         }
-        
+
         void show()
         {
                 Serial.println("authenticated number white list: ");
@@ -107,7 +107,7 @@ class authNumList
                         Serial.print(" | ");
                 }
         }
-        
+
         bool check(String number)
         {
                 handle();
@@ -124,12 +124,12 @@ class authNumList
 
 class alarm
 {
-        private:
+private:
         bool State = false;
         int pin;
         unsigned long activationTime;
-        
-        public:
+
+public:
         alarm(int alarmPin);
         void arm()
         {
@@ -137,7 +137,7 @@ class alarm
                 State = true;
                 activationTime = millis();
         }
-        
+
         void handle()
         {
                 if (millis() - activationTime > alarmDuration)
@@ -146,46 +146,54 @@ class alarm
                         State = false;
                 }
         }
-        
+
         bool getState()
         {
                 return State;
         }
 };
 
-
 alarm::alarm(int alarmPin)
 {
         pin = alarmPin;
 }
+
 struct buffer
 {
-        char data[128];
-        char length = 0;
+#define bufferLength 128
+
+        char data[bufferLength];
+        uint8_t length = 0;
+
         void add(char character)
         {
-                if (length < 127)
+                if (length < bufferLength - 1)
                 {
                         data[length] = character;
+                        data[length + 1] = '\0';
                         length++;
                 }
         }
+        void empty()
+        {
+                length = 0;
+                data[0] = '\0';
+        }
         void print()
         {
-                for (size_t i = 0; i < length; i++)
+                for (size_t i = 0; i < strlen(data); i++)
                 {
                         Serial.print(data[i]);
                 }
-                
         }
 };
 
-bool extractSMS(buffer *input, buffer *output);
+bool extractSMS(buffer *input, char *output, uint8_t outputLength);
+void extractNumber(buffer *input, char *output);
 bool executed = false;
 bool enable = true;
 unsigned long dialstart = 0;
-String sim800lbuff = "";
-String NumberWhiteList[70];
+String NumberWhiteList[20];
 
 unsigned char numberWhiteListLength = 0;
 
@@ -205,7 +213,7 @@ void printwholeeeprom()
                         Serial.print((char)EEPROM[i + index]);
                         Serial.print(" ");
                 }
-                Serial.println("");
+                Serial.println();
         }
 }
 
@@ -255,8 +263,10 @@ void setup()
         //{
         //   EEPROM.update(i, 255);
         // }
-
+        writeNumberToEeprom("989029026240");
+        storePassword("1234");
         readWhitelist();
+        printwholeeeprom();
 }
 void loop()
 {
@@ -331,91 +341,158 @@ void loop()
                 executed = false;
         }
 
+        // writeNumberToEeprom("989029026240");
+
         // Serial.println("aga in sim800l_buffer khedmat shoma:");
         // sim800l_buffer.print();
-        Serial.print("aga inam javab estekhraj sms: ");
-        Serial.println(extractSMS(&sim800l_buffer,&test),DEC);
-        Serial.print("aga inam buffer output: ");
-        test.print();
-        test.length = 0;
-        //Serial.println();
 
-        
         updateSerial();
         handlecommand();
         siren.handle();
+        sim800l_buffer.print();
+        authenticatedNumList.handle();
 
-        delay(100);
+        delay(200);
 }
 
 void updateSerial()
 {
-        sim800lbuff = "";
-        sim800l_buffer.length = 0;
+        sim800l_buffer.empty();
         char data;
-        delay(500);
         while (Serial.available())
         {
                 mySerial.write(Serial.read()); // Forward what Serial received to Software Serial Port
         }
+
+        // while (millis() - last < timeout)
+        // {
+        //         while (mySerial.available())
+        //         {
+        //                 data = mySerial.read();
+        //                 // Serial.write(data); // Forward what Software Serial received to Serial Port
+        //                 sim800l_buffer.add(data);
+        //                 last = millis();
+        //         }
+        // }
+
         while (mySerial.available())
         {
                 data = mySerial.read();
                 // Serial.write(data); // Forward what Software Serial received to Serial Port
-                sim800lbuff += data;
                 sim800l_buffer.add(data);
         }
 }
 
 void handlecommand()
 {
-        String Senderphonenumber = sim800lbuff.substring(10, 22);
-        Serial.println(sim800lbuff.substring(10, 22));
-        if (checkMessenger(Senderphonenumber))
-        {
-                Serial.println("number matched");
 
-                String sms = "";
-                if (sim800lbuff.substring(2, 6) == "+CMT")
+        char sms[32];
+
+        if (extractSMS(&sim800l_buffer, sms, 32))
+        {
+                char senderPhoneNumber[13];
+                extractNumber(&sim800l_buffer, senderPhoneNumber);
+
+                Serial.print("sms recieved,there is your sms");
+                for (int i = 0; i < 32; i++)
+                {
+                        Serial.print(sms[i], HEX);
+                        Serial.print(":");
+                        Serial.print(sms[i]);
+                        Serial.print(" ");
+                }
+                Serial.println();
+
+                Serial.print("the sender phone number is: ");
+                for (int i = 0; i < 13; i++)
+                {
+                        Serial.print(senderPhoneNumber[i], HEX);
+                        Serial.print(":");
+                        Serial.print(senderPhoneNumber[i]);
+                        Serial.print(" ");
+                }
+
+                char *tokenp = strtok(sms, " ");
+
+                // auth command can be used even if the phone number is not is the whitelist
+
+                if (strstr(tokenp, "auth"))
+                {
+                        Serial.println("auth command detected");
+                        tokenp = strtok(NULL, " ");
+
+                        Serial.println(tokenp);
+                        Serial.println(verifyPassword(tokenp));
+
+                        for (int i = 0; i < strlen(tokenp); i++)
+                        {
+                                Serial.print(tokenp[i],HEX);
+                                Serial.print(": ");
+                                Serial.print(tokenp[i]);
+                                Serial.print("  ");
+                        }
+                        
+
+                        if (verifyPassword(tokenp))
+                        {
+                                authenticatedNumList.add(senderPhoneNumber);
+                                authenticatedNumList.show();
+                        }
+                }
+
+                if (checkMessenger(senderPhoneNumber))
                 {
 
-                        for (unsigned int i = 10; i < sim800lbuff.length() - 1; i++)
-                        {
-                                if (sim800lbuff[i] == '\n')
-                                {
-                                        sms = cutstring(sim800lbuff, i + 2, sim800lbuff.length());
-                                        Serial.print("there is your sms:");
-                                        Serial.println(sms);
+                        Serial.println("number matched");
+                        Serial.print("there is your sms:");
+                        Serial.println(sms);
+                        Serial.println();
 
-                                        if (CompareFirstofString(sms, "enable"))
-                                        {
-                                                Serial.println("enable command detected");
-                                                enable = true;
-                                        }
-                                        else if (CompareFirstofString(sms, "disable"))
-                                        {
-                                                Serial.println("disable command detected");
-                                                enable = false;
-                                        }
-                                        else if (CompareFirstofString(sms, "stats"))
-                                        {
-                                                Serial.println("stats command detected");
-                                                Serial.println(checkstats());
-                                        }
-                                        else if (CompareFirstofString(sms, "alarm off"))
-                                        {
-                                                Serial.println("alarm off command detected");
-                                        }
-                                        else if (CompareFirstofString(sms, "auth"))
-                                        {
-                                                Serial.println("auth number command detected");
-                                                String password = cutstring(sms, 4, sms.length() - 1);
-                                                Serial.println(password);
-                                                Serial.println(verifyPassword(password));
-                                        }
-                                        continue;
-                                }
+                        if (strstr(tokenp, "enable"))
+                        {
+                                Serial.println("enable command detected");
+                                enable = true;
                         }
+                        else if (strstr(tokenp, "disable"))
+                        {
+                                Serial.println("disable command detected");
+                                enable = false;
+                        }
+                        else if (strstr(tokenp, "stats"))
+                        {
+                                Serial.println("stats command detected");
+                                Serial.println(checkstats());
+                        }
+                        else if (strstr(tokenp, "alarm off"))
+                        {
+                                Serial.println("alarm off command detected");
+                        }
+                }
+
+                if (authenticatedNumList.check(senderPhoneNumber))
+                {
+                        if (strstr(tokenp, "add"))
+                        {
+                                Serial.println("add command detected");
+
+                                tokenp = strtok(NULL, " ");
+
+                                Serial.println(tokenp);
+
+                                if (!writeNumberToEeprom(tokenp))
+                                {
+                                        Serial.print("succesfully wrote ");
+                                        Serial.println(tokenp);
+                                }
+                        }else if (strstr(tokenp,"setpass"))
+                        {
+                                Serial.println("setpass command detected");
+
+                                tokenp = strtok(NULL," ");
+                                Serial.println(tokenp);
+                                storePassword(tokenp);
+                        }
+                        
                 }
         }
 }
@@ -431,6 +508,16 @@ String cutstring(String text, int starti, int endi)
 
         return outputstring;
 }
+
+void ccutstring(const char *source, int start, int end, char *dest)
+{
+        int i;
+        for (i = 0; i < strlen(source) && i < end; i++)
+        {
+                dest[i] = source[i];
+        }
+        dest[i] = '\0';
+}
 // compares the first characters of input string to the second one
 bool CompareFirstofString(String inputString, String stringtoCompare)
 {
@@ -444,17 +531,18 @@ bool CompareFirstofString(String inputString, String stringtoCompare)
         return true;
 }
 // compares the senders phone number to the given number
-bool checkMessenger(String phonenumber)
+bool checkMessenger(char *phonenumber)
 {
-        // String phonenumber = cutstring(sim800lbuff, 11, 21);
-
+        char tempChar[13];
         for (int i = 0; i < numberWhiteListLength; i++)
         {
-                if (phonenumber == NumberWhiteList[i])
+                NumberWhiteList[i].toCharArray(tempChar, 13);
+                if (strcmp(tempChar, phonenumber) == 0 || authenticatedNumList.check(phonenumber))
                 {
                         return true;
                 }
         }
+
         return false;
 }
 
@@ -542,6 +630,7 @@ void readWhitelist()
 
 bool writeNumberToEeprom(String number)
 {
+
         if (number.length() != 12)
         {
                 Serial.println("bad format :(");
@@ -552,7 +641,6 @@ bool writeNumberToEeprom(String number)
 
         for (int i = 0; i < numberWhiteListLength; i++)
         {
-                Serial.println("man to in for e am");
                 if (number == NumberWhiteList[i])
                 {
                         Serial.println("number is already stored!!");
@@ -656,15 +744,13 @@ void storePassword(String password)
         free(md5str);
 }
 
-bool verifyPassword(String password)
+bool verifyPassword(char *password)
 {
         // unsigned char *hash = calcpasswordHash(password);
 
-        char charPassword[password.length() + 1];
-        password.toCharArray(charPassword, password.length() + 1);
-        unsigned char *hash = MD5::make_hash(charPassword);
+        unsigned char *hash = MD5::make_hash(password);
 
-        for (size_t i = 0; i < eepromStartIndex; i++)
+        for (int i = 0; i < eepromStartIndex; i++)
         {
                 if (hash[i] != EEPROM[i])
                 {
@@ -683,32 +769,53 @@ void handleAll()
         siren.handle();
 }
 
-bool extractSMS(buffer *input, buffer *output)
+bool extractSMS(buffer *input, char *output, uint8_t outputLength)
 {
-        output->length = 0;
+        output[0] = '\0';
 
         if (strstr(input->data, "+CMT"))
         {
-                bool newLineFound = false;
-                for (size_t i = 3; i < input->length; i++)
-                {
-                        if (input->data[i] == '\n')
-                        {
-                                newLineFound = !newLineFound;
-                                i++;//
-                        }
-                        
-                        if(newLineFound){
-                                output->add(input->data[i]);
-                        }
-                }
 
-                if (newLineFound)
+                
+
+            
+                input->data[bufferLength - 1] = '\0';
+
+                strtok(input->data, "\n\r");
+                char *token = strtok(NULL, "\n\r");
+
+                if (token != NULL)
                 {
+                        strncpy(output, token, outputLength);
+                        output[outputLength - 1] = '\0';
+
                         return true;
                 }
-                
         }
 
         return false;
+}
+
+void extractNumber(buffer *input, char *output)
+{
+
+        if (strstr(input->data, "+CMT"))
+        {
+                // bool foundBegining = false;
+                output[0] = '\0';
+                for (int i = 0; i < input->length; i++)
+                {
+
+                        if (input->data[i] == '"')
+                        {
+                                i += 2; // skip the + and "
+                                for (int ii = 0; ii < 12; ii++)
+                                {
+                                        output[ii] = input->data[i + ii];
+                                }
+                                output[12] = '\0';
+                                return;
+                        }
+                }
+        }
 }
