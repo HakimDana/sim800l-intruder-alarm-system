@@ -10,7 +10,7 @@
 
 const unsigned char eepromStartIndex = 16;
 const int alarmDuration = 60000;
-const unsigned long authTimeOut = 90000;
+const unsigned long authTimeOut = 900000;
 
 void updateSerial();
 void handlecommand();
@@ -25,7 +25,7 @@ String cutstring(String text, int starti, int endi);
 bool CompareFirstofString(String inputString, String stringtoCompare);
 bool checkMessenger(char *phonenumber);
 bool writeNumberToEeprom(String number);
-bool deleteNumberInEeprom(String number);
+bool deleteNumberInEeprom(char *number);
 bool verifyPassword(char *password);
 
 unsigned char calcChecksum(String inputString);
@@ -60,7 +60,7 @@ public:
 
                 for (size_t i = 0; i < length; i++)
                 {
-                        if (strcmp(number,list[i].number))
+                        if (strcmp(number, list[i].number) == 0)
                         {
                                 list[i].time = millis();
                                 Serial.println("updated the time");
@@ -68,7 +68,7 @@ public:
                         }
                 }
 
-                strncpy(list[length].number,number,13);
+                strncpy(list[length].number, number, 13);
                 list[length].time = millis();
                 length++;
         }
@@ -77,8 +77,8 @@ public:
         {
                 for (size_t i = index; i < length; i++)
                 {
-                        //list[i].number = list[i + 1].number;
-                        strncpy(list[i].number,list[i + 1].number,13);
+                        // list[i].number = list[i + 1].number;
+                        strncpy(list[i].number, list[i + 1].number, 13);
                         list[i].time = list[i + 1].time;
                 }
                 length--;
@@ -393,24 +393,25 @@ void handlecommand()
                 char senderPhoneNumber[13];
                 extractNumber(&sim800l_buffer, senderPhoneNumber);
 
-                Serial.print("sms recieved,there is your sms");
-                for (int i = 0; i < 32; i++)
-                {
-                        Serial.print(sms[i], HEX);
-                        Serial.print(":");
-                        Serial.print(sms[i]);
-                        Serial.print(" ");
-                }
-                Serial.println();
+                Serial.print("sms recieved,there is your sms: ");
+                Serial.println(sms);
+                // for (int i = 0; i < 32; i++)
+                // {
+                //         Serial.print(sms[i], HEX);
+                //         Serial.print(":");
+                //         Serial.print(sms[i]);
+                //         Serial.print(" ");
+                // }
 
                 Serial.print("the sender phone number is: ");
-                for (int i = 0; i < 13; i++)
-                {
-                        Serial.print(senderPhoneNumber[i], HEX);
-                        Serial.print(":");
-                        Serial.print(senderPhoneNumber[i]);
-                        Serial.print(" ");
-                }
+                Serial.println(senderPhoneNumber);
+                // for (int i = 0; i < 13; i++)
+                // {
+                //         Serial.print(senderPhoneNumber[i], HEX);
+                //         Serial.print(":");
+                //         Serial.print(senderPhoneNumber[i]);
+                //         Serial.print(" ");
+                // }
 
                 char *tokenp = strtok(sms, " ");
 
@@ -426,12 +427,11 @@ void handlecommand()
 
                         for (int i = 0; i < strlen(tokenp); i++)
                         {
-                                Serial.print(tokenp[i],HEX);
+                                Serial.print(tokenp[i], HEX);
                                 Serial.print(": ");
                                 Serial.print(tokenp[i]);
                                 Serial.print("  ");
                         }
-                        
 
                         if (verifyPassword(tokenp))
                         {
@@ -484,15 +484,22 @@ void handlecommand()
                                         Serial.print("succesfully wrote ");
                                         Serial.println(tokenp);
                                 }
-                        }else if (strstr(tokenp,"setpass"))
+                        }
+                        else if (strstr(tokenp, "del"))
+                        {
+                                Serial.println("del command detected");
+                                tokenp = strtok(NULL, " ");
+                                Serial.println(tokenp);
+                                deleteNumberInEeprom(tokenp);
+                        }
+                        else if (strstr(tokenp, "setpass"))
                         {
                                 Serial.println("setpass command detected");
 
-                                tokenp = strtok(NULL," ");
+                                tokenp = strtok(NULL, " ");
                                 Serial.println(tokenp);
                                 storePassword(tokenp);
                         }
-                        
                 }
         }
 }
@@ -684,7 +691,7 @@ bool writeNumberToEeprom(String number)
         return true;
 }
 
-bool deleteNumberInEeprom(String number)
+bool deleteNumberInEeprom(char *number)
 {
 
         numberWhiteListLength = 0;
@@ -710,13 +717,13 @@ bool deleteNumberInEeprom(String number)
                 if (isEmpty == false)
                 {
                         EEPROM.get(index, tempReadNumber);
-                        if (number == tempReadNumber.phoneNumber)
+                        if (strcmp(number, tempReadNumber.phoneNumber) == 0)
                         {
                                 for (int i = 0; i < STRUCT_SIZE; i++)
                                 {
                                         EEPROM.write(i + index, 255);
                                 }
-                                return 0;
+                                return false;
                         }
                 }
         }
@@ -776,9 +783,6 @@ bool extractSMS(buffer *input, char *output, uint8_t outputLength)
         if (strstr(input->data, "+CMT"))
         {
 
-                
-
-            
                 input->data[bufferLength - 1] = '\0';
 
                 strtok(input->data, "\n\r");
