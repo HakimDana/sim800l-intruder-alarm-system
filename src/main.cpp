@@ -7,6 +7,8 @@
 #define redledpin 5
 #define greenledpin 6
 #define alarmpin 7
+#define TX_PIN 3
+#define RX_PIN 2
 
 const unsigned char eepromStartIndex = 16;
 const int alarmDuration = 60000;
@@ -38,6 +40,7 @@ struct storedNumber
 
 class authNumList
 {
+        #define AUTHNUMLIST_LENGTH 5
 private:
         uint8_t length = 0;
 
@@ -47,12 +50,12 @@ private:
                 unsigned long time = 0;
         };
 
-        authenticatedNumber list[5];
+        authenticatedNumber list[AUTHNUMLIST_LENGTH];
 
 public:
         void add(char *number)
         {
-                if (length == 10)
+                if (length == AUTHNUMLIST_LENGTH)
                 {
                         Serial.println("authenticated number list is full");
                         return;
@@ -229,7 +232,7 @@ void printwholewhitelist()
 }
 
 // Create software serial object to communicate with SIM800L
-SoftwareSerial mySerial(3, 2); // SIM800L Tx & Rx is connected to Arduino #3 & #2
+SoftwareSerial mySerial(TX_PIN, RX_PIN); // SIM800L Tx & Rx is connected to Arduino #3 & #2
 alarm siren(alarmpin);
 authNumList authenticatedNumList;
 buffer sim800l_buffer;
