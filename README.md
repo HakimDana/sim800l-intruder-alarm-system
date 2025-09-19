@@ -17,11 +17,8 @@
 - [SMS command protocol (usage)](#sms-command-protocol-usage)
 - [EEPROM layout](#eeprom-layout)
 - [Runtime behaviour / state machine notes](#runtime-behaviour--state-machine-notes)
-- [Known issues & gotchas (important)](#known-issues--gotchas-important)
+- [Known issues & (important)](#known-issues--gotchas-important)
 - [TODO / Roadmap (prioritised)](#todo--roadmap-prioritised)
-- [Security notes](#security-notes)
-- [Contributing / Development notes](#contributing--development-notes)
-- [License](#license)
 
 ---
 
@@ -77,7 +74,7 @@ IMPORTANT NOTE: change SoftwareSerial buffer length to 128 for reliable operatio
 ---
 
 ## Build & Upload (Arduino)
-1. Install required MD5 library in Arduino IDE.
+1. Install [required](https://github.com/tzikis/ArduinoMD5) MD5 library in Arduino IDE.
 2. Open the sketch in Arduino IDE.
 3. Select the correct board and COM port.
 4. Upload. Monitor using Serial Monitor 9600 baud.
