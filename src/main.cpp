@@ -16,6 +16,7 @@ const unsigned long authTimeOut = 900000;
 
 void updateSerial();
 void handlecommand();
+void eraseSlot(int slot);
 void sendsms(String sms, String phonenumber);
 void readWhitelist();
 void storePassword(String password);
@@ -38,9 +39,11 @@ struct storedNumber
         unsigned char checksum = 0;
 };
 
+constexpr unsigned long structSize = sizeof(storedNumber);
+
 class authNumList
 {
-        #define AUTHNUMLIST_LENGTH 5
+#define AUTHNUMLIST_LENGTH 5
 private:
         uint8_t length = 0;
 
@@ -506,6 +509,13 @@ void handlecommand()
                 }
         }
 }
+void eraseSlot(int slot)
+{
+        for (int i = 0; i < structSize; i++)
+        {
+                EEPROM.write(i + slot, 0xff);
+        }
+}
 // returns a string starting and ending from the given index numbers in the given string
 String cutstring(String text, int starti, int endi)
 {
@@ -607,12 +617,10 @@ void readWhitelist()
         numberWhiteListLength = 0;
         storedNumber tempReadNumber;
 
-        const int STRUCT_SIZE = sizeof(tempReadNumber);
-
-        for (int index = eepromStartIndex; index < EEPROM.length(); index += STRUCT_SIZE)
+        for (int index = eepromStartIndex; index < EEPROM.length(); index += structSize)
         {
                 bool isEmpty = false;
-                for (int slotIndex = 0; slotIndex < STRUCT_SIZE; slotIndex++)
+                for (int slotIndex = 0; slotIndex < structSize; slotIndex++)
                 {
                         if (EEPROM[slotIndex + index] != 0xff)
                         {
@@ -631,6 +639,11 @@ void readWhitelist()
                         {
                                 NumberWhiteList[numberWhiteListLength] = tempReadNumber.phoneNumber;
                                 numberWhiteListLength++;
+                        }
+                        else
+                        {
+                                //erase the stored number if it is corrupt
+                                eraseSlot(index);
                         }
                 };
         }
@@ -700,12 +713,11 @@ bool deleteNumberInEeprom(char *number)
         numberWhiteListLength = 0;
         storedNumber tempReadNumber;
 
-        const int STRUCT_SIZE = sizeof(tempReadNumber);
 
-        for (int index = eepromStartIndex; index < EEPROM.length(); index += STRUCT_SIZE)
+        for (int index = eepromStartIndex; index < EEPROM.length(); index += structSize)
         {
                 bool isEmpty = false;
-                for (int slotIndex = 0; slotIndex < STRUCT_SIZE; slotIndex++)
+                for (int slotIndex = 0; slotIndex < structSize; slotIndex++)
                 {
                         if (EEPROM[slotIndex + index] != 0xff)
                         {
@@ -722,10 +734,7 @@ bool deleteNumberInEeprom(char *number)
                         EEPROM.get(index, tempReadNumber);
                         if (strcmp(number, tempReadNumber.phoneNumber) == 0)
                         {
-                                for (int i = 0; i < STRUCT_SIZE; i++)
-                                {
-                                        EEPROM.write(i + index, 255);
-                                }
+                                eraseSlot(index);
                                 return false;
                         }
                 }
